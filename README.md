@@ -75,6 +75,37 @@ You should see **LaunchDarkly Toolbar Extension** in the list. (Chrome Web Store
 
 The bridge plugin works with **any** browser-side LaunchDarkly SDK that supports the `plugins` config option (JS Client v3.6.0+ — which includes React, Vue, and Angular wrappers).
 
+> **Installation:** `@launchdarkly/toolbar-extension-bridge` is **not yet published to npm**. You can still install it directly from this repository today using one of the two methods below. The published name is reserved for a future release; once it lands on npm, the integration code (the `import` lines and the SDK config) won't change.
+>
+> **Option A — local file path (best for development / iteration):**
+> Clone this repo somewhere on your machine, then add the dep in your app's `package.json`:
+>
+> ```json
+> "dependencies": {
+>   "@launchdarkly/toolbar-extension-bridge": "file:../relative/path/to/ld-toolbar-extension/packages/bridge-plugin"
+> }
+> ```
+>
+> Then run `npm install` (or `pnpm install` / `yarn install`) in your app. Whenever the bridge plugin source changes, run `corepack pnpm --filter @launchdarkly/toolbar-extension-bridge run build` in the cloned repo to refresh the built `dist/` your app consumes.
+>
+> **Option B — tarball install (best for hand-off to another team):**
+> In a checkout of this repo:
+>
+> ```bash
+> corepack pnpm install
+> corepack pnpm --filter @launchdarkly/toolbar-extension-bridge run build
+> cd packages/bridge-plugin
+> npm pack
+> ```
+>
+> That produces `launchdarkly-toolbar-extension-bridge-0.0.1.tgz`. Hand the tarball to whoever needs the package and have them install it in their app:
+>
+> ```bash
+> npm install /path/to/launchdarkly-toolbar-extension-bridge-0.0.1.tgz
+> ```
+>
+> Once installed via either method, the rest of the integration is identical to what's shown below.
+
 **Vanilla JS:**
 
 ```js
