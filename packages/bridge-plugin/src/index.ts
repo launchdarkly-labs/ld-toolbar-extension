@@ -40,6 +40,7 @@ interface SdkReadyInfo {
 
 type OverrideMessage =
   | { type: "set-overrides"; overrides: Record<string, LDFlagValue> }
+  | { type: "remove-override"; flagKey: string }
   | { type: "clear-overrides" };
 
 /**
@@ -262,6 +263,8 @@ export class ExtensionBridgePlugin implements LDPlugin {
       for (const [key, value] of Object.entries(msg.overrides)) {
         this.setOverride(key, value);
       }
+    } else if (msg.type === "remove-override") {
+      this.removeOverride(msg.flagKey);
     } else if (msg.type === "clear-overrides") {
       this.clearAllOverrides();
     }

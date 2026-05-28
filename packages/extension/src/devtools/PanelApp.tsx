@@ -52,13 +52,7 @@ export function PanelApp() {
   const handleRemove = (key: string) => {
     const { [key]: _removed, ...rest } = localOverrides;
     setLocalOverrides(rest);
-    // For v0 we re-push the remaining overrides as a fresh set. The page
-    // applies what we send and the bridge plugin will clear keys we no
-    // longer set on the next full-replace iteration.
-    rpc.clearOverrides();
-    for (const [k, v] of Object.entries(rest)) {
-      rpc.setOverride(k, v);
-    }
+    rpc.removeOverride(key);
   };
 
   const handleClearAll = () => {

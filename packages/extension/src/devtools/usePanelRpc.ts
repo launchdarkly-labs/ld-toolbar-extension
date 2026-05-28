@@ -100,6 +100,13 @@ export function usePanelRpc() {
     [send],
   );
 
+  const removeOverride = useCallback(
+    (flagKey: string) => {
+      send("remove-override", { flagKey });
+    },
+    [send],
+  );
+
   const clearOverrides = useCallback(() => {
     send("clear-overrides");
   }, [send]);
@@ -112,6 +119,7 @@ export function usePanelRpc() {
     tabId,
     ...state,
     setOverride,
+    removeOverride,
     clearOverrides,
     requestStatus,
   };

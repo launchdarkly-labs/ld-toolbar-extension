@@ -103,7 +103,11 @@ chrome.runtime.onConnect.addListener((port) => {
       return;
     }
 
-    if (message.type === "set-overrides" || message.type === "clear-overrides") {
+    if (
+      message.type === "set-overrides" ||
+      message.type === "remove-override" ||
+      message.type === "clear-overrides"
+    ) {
       try {
         await chrome.tabs.sendMessage(tabId, message);
       } catch (err) {

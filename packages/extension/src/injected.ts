@@ -43,6 +43,7 @@ export interface SdkReadyInfo {
 
 export type OverrideMessage =
   | { type: "set-overrides"; overrides: Record<string, unknown> }
+  | { type: "remove-override"; flagKey: string }
   | { type: "clear-overrides" };
 
 export type OverrideListener = (msg: OverrideMessage) => void;
@@ -84,18 +85,25 @@ if (!window.__LD_DEVTOOLS_HOOK__) {
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
   const data = event.data as
-    | { source?: string; direction?: string; type?: string; overrides?: unknown }
+    | {
+        source?: string;
+        direction?: string;
+        type?: string;
+        overrides?: unknown;
+        flagKey?: unknown;
+      }
     | null;
   if (!data || data.source !== PROTOCOL || data.direction !== "from-ext") {
     return;
   }
 
   if (data.type === "set-overrides" && data.overrides && typeof data.overrides === "object") {
-    const msg: OverrideMessage = {
+    fanOut({
       type: "set-overrides",
       overrides: data.overrides as Record<string, unknown>,
-    };
-    fanOut(msg);
+    });
+  } else if (data.type === "remove-override" && typeof data.flagKey === "string") {
+    fanOut({ type: "remove-override", flagKey: data.flagKey });
   } else if (data.type === "clear-overrides") {
     fanOut({ type: "clear-overrides" });
   }
