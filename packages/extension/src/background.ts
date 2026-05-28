@@ -86,7 +86,9 @@ const ldExt = {
   ): Promise<void> {
     const [tab] = await chrome.tabs.query({
       active: true,
-      currentWindow: true,
+      // SWs have no "current window" — lastFocusedWindow is the working
+      // equivalent from a background context.
+      lastFocusedWindow: true,
     });
     if (!tab?.id) {
       throw new Error("No active tab in current window");
@@ -106,7 +108,9 @@ const ldExt = {
   async clearOverridesOnActiveTab(): Promise<void> {
     const [tab] = await chrome.tabs.query({
       active: true,
-      currentWindow: true,
+      // SWs have no "current window" — lastFocusedWindow is the working
+      // equivalent from a background context.
+      lastFocusedWindow: true,
     });
     if (!tab?.id) {
       throw new Error("No active tab in current window");
