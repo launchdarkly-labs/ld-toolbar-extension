@@ -12,6 +12,7 @@ export default defineManifest({
     service_worker: "src/background.ts",
     type: "module",
   },
+  devtools_page: "src/devtools/devtools.html",
   content_scripts: [
     {
       matches: ["<all_urls>"],

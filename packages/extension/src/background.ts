@@ -1,19 +1,21 @@
 /**
  * Service worker — MV3 background.
  *
- * v0 responsibilities:
- *  - Track which tabs have an LD SDK active (tab registry)
+ * Responsibilities:
+ *  - Tab registry: which tabs have a content script loaded + an LD SDK active
  *  - Receive messages from the ISOLATED-world content script
- *  - Send override commands down to specific tabs on demand
- *  - Expose a small helper API on `globalThis.ldExt` so we can drive
- *    overrides manually from the SW DevTools console while we build the
- *    DevTools panel UI
+ *  - Maintain long-lived ports to DevTools panels, keyed by inspected tabId
+ *  - Forward override commands from panels to content scripts in the
+ *    matching tab
+ *  - Push tab-status updates to subscribed panels on relevant changes
  *
- * Persistence to chrome.storage.local + per-origin scoping comes in a
- * later slice.
+ * Persistence to chrome.storage.local + per-origin scoping is still TODO.
+ *
+ * The legacy `globalThis.ldExt` helpers stay around for SW-console testing.
  */
 
 const PROTOCOL = "ld-devtools-ext";
+const PORT_NAME_PREFIX = "panel:";
 
 interface TabEntry {
   url?: string;
@@ -22,6 +24,8 @@ interface TabEntry {
 }
 
 const tabs: Map<number, TabEntry> = new Map();
+/** DevTools panels currently open, keyed by the tabId they are inspecting. */
+const panelPorts: Map<number, chrome.runtime.Port> = new Map();
 
 // eslint-disable-next-line no-console
 console.info("[LD Toolbar Extension] service worker booted");
@@ -36,6 +40,7 @@ chrome.runtime.onStartup.addListener(() => {
   console.info("[LD Toolbar Extension] startup");
 });
 
+// ─── content-script ←→ background ──────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (!message || message.source !== PROTOCOL) return;
   const tabId = sender.tab?.id;
@@ -48,6 +53,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       `[LD Toolbar Extension] content script loaded in tab ${tabId}`,
       sender.tab?.url,
     );
+    pushTabStatus(tabId);
   } else if (message.type === "sdk-ready") {
     const entry: TabEntry = tabs.get(tabId) ?? { loadedAt: Date.now() };
     entry.sdkInfo = message.info;
@@ -58,31 +64,93 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       `[LD Toolbar Extension] SDK ready in tab ${tabId}`,
       message.info,
     );
+    pushTabStatus(tabId);
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabs.delete(tabId);
+  const port = panelPorts.get(tabId);
+  if (port) {
+    try {
+      port.disconnect();
+    } catch {
+      /* ignore */
+    }
+    panelPorts.delete(tabId);
+  }
 });
 
-// Helper API for manual testing from the SW DevTools console. Operates on
-// the tab registry we maintain ourselves — using chrome.tabs.query from a
-// SW is unreliable because the SW DevTools window itself becomes the
-// "current"/"last focused" window. Once the DevTools panel UI exists this
-// gets replaced by port-based RPC scoped to whichever tab the panel is
-// inspecting.
+// ─── DevTools panel ←→ background ──────────────────────────────────────
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith(PORT_NAME_PREFIX)) return;
+
+  const tabId = parseInt(port.name.slice(PORT_NAME_PREFIX.length), 10);
+  if (Number.isNaN(tabId)) {
+    port.disconnect();
+    return;
+  }
+
+  panelPorts.set(tabId, port);
+  // eslint-disable-next-line no-console
+  console.info(`[LD Toolbar Extension] panel connected for tab ${tabId}`);
+
+  port.onMessage.addListener(async (message) => {
+    if (!message || message.source !== PROTOCOL) return;
+
+    if (message.type === "get-tab-status") {
+      pushTabStatus(tabId);
+      return;
+    }
+
+    if (message.type === "set-overrides" || message.type === "clear-overrides") {
+      try {
+        await chrome.tabs.sendMessage(tabId, message);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[LD Toolbar Extension] failed to forward ${message.type} to tab ${tabId}:`,
+          err,
+        );
+      }
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    if (panelPorts.get(tabId) === port) {
+      panelPorts.delete(tabId);
+    }
+    // eslint-disable-next-line no-console
+    console.info(`[LD Toolbar Extension] panel disconnected for tab ${tabId}`);
+  });
+});
+
+function pushTabStatus(tabId: number): void {
+  const port = panelPorts.get(tabId);
+  if (!port) return;
+  const entry = tabs.get(tabId);
+  try {
+    port.postMessage({
+      source: PROTOCOL,
+      type: "tab-status",
+      tabId,
+      url: entry?.url,
+      sdkInfo: entry?.sdkInfo,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[LD Toolbar Extension] failed to push status to panel for tab ${tabId}:`,
+      err,
+    );
+  }
+}
+
+// ─── SW console helpers (still useful while UI is in flight) ──────────
 const ldExt = {
-  /** List all tabs we know about (have a loaded content script). */
-  listTabs(): Array<[number, TabEntry]> {
-    return Array.from(tabs.entries());
-  },
-
-  /** List only tabs where the LD SDK has registered. */
-  listSdkTabs(): Array<[number, TabEntry]> {
-    return Array.from(tabs.entries()).filter(([, entry]) => entry.sdkInfo);
-  },
-
-  /** Send overrides to a specific tab. Use this when you know the tab ID. */
+  listTabs: () => Array.from(tabs.entries()),
+  listSdkTabs: () =>
+    Array.from(tabs.entries()).filter(([, entry]) => entry.sdkInfo),
   async setOverridesOnTab(
     tabId: number,
     overrides: Record<string, unknown>,
@@ -93,11 +161,6 @@ const ldExt = {
       overrides,
     });
   },
-
-  /**
-   * Send overrides to every tab in the registry that has an active SDK.
-   * Convenient when there's only one demo tab open during manual testing.
-   */
   async setOverrides(overrides: Record<string, unknown>): Promise<number> {
     const sdkTabs = this.listSdkTabs();
     await Promise.all(
@@ -108,27 +171,17 @@ const ldExt = {
             type: "set-overrides",
             overrides,
           })
-          .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `[LD Toolbar Extension] failed to send overrides to tab ${tabId}:`,
-              err,
-            );
-          }),
+          .catch(() => undefined),
       ),
     );
     return sdkTabs.length;
   },
-
-  /** Clear overrides on a specific tab. */
   async clearOverridesOnTab(tabId: number): Promise<void> {
     await chrome.tabs.sendMessage(tabId, {
       source: PROTOCOL,
       type: "clear-overrides",
     });
   },
-
-  /** Clear overrides on every tab in the registry that has an active SDK. */
   async clearOverrides(): Promise<number> {
     const sdkTabs = this.listSdkTabs();
     await Promise.all(
@@ -138,13 +191,7 @@ const ldExt = {
             source: PROTOCOL,
             type: "clear-overrides",
           })
-          .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `[LD Toolbar Extension] failed to clear overrides on tab ${tabId}:`,
-              err,
-            );
-          }),
+          .catch(() => undefined),
       ),
     );
     return sdkTabs.length;

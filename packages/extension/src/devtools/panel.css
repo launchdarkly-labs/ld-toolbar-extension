@@ -1,0 +1,245 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #111;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1e1e1e;
+    color: #e6e6e6;
+  }
+}
+
+.ld-panel {
+  padding: 16px;
+  max-width: 800px;
+}
+
+.ld-panel h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  letter-spacing: 0.2px;
+}
+
+.ld-status {
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: #f4f5f7;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-status {
+    background: #2a2a2a;
+  }
+}
+
+.ld-status.detected {
+  background: #e9f5ec;
+  color: #1d6b32;
+}
+
+.ld-status.missing {
+  background: #fdecea;
+  color: #b32424;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-status.detected {
+    background: #163020;
+    color: #7fd99a;
+  }
+  .ld-status.missing {
+    background: #3a1818;
+    color: #ff8585;
+  }
+}
+
+.ld-status code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.ld-section {
+  margin-bottom: 20px;
+}
+
+.ld-section h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  margin: 0 0 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-section h2 {
+    color: #aaa;
+  }
+}
+
+.ld-override-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-override-list {
+    border-color: #3a3a3a;
+  }
+}
+
+.ld-override-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-override-list li {
+    border-bottom-color: #3a3a3a;
+  }
+}
+
+.ld-override-list li:last-child {
+  border-bottom: none;
+}
+
+.ld-override-key {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  flex: 1;
+}
+
+.ld-override-value {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #406bf2;
+}
+
+.ld-empty {
+  padding: 12px;
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.ld-form {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ld-form input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 12px;
+  background: white;
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-form input {
+    background: #2a2a2a;
+    border-color: #555;
+    color: #e6e6e6;
+  }
+}
+
+.ld-form input:focus {
+  outline: 2px solid #406bf2;
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.ld-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 3px;
+  background: #406bf2;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ld-btn:hover {
+  background: #2f56d3;
+}
+
+.ld-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ld-btn.secondary {
+  background: transparent;
+  color: #406bf2;
+  border: 1px solid #406bf2;
+}
+
+.ld-btn.secondary:hover {
+  background: rgba(64, 107, 242, 0.08);
+}
+
+.ld-btn.danger {
+  background: #d33b3b;
+}
+
+.ld-btn.danger:hover {
+  background: #b32424;
+}
+
+.ld-btn.icon {
+  padding: 2px 8px;
+  font-size: 14px;
+  background: transparent;
+  color: #999;
+  border: 1px solid transparent;
+}
+
+.ld-btn.icon:hover {
+  background: rgba(211, 59, 59, 0.1);
+  color: #d33b3b;
+  border-color: rgba(211, 59, 59, 0.3);
+}
+
+.ld-hint {
+  font-size: 11px;
+  color: #777;
+  margin-top: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-hint {
+    color: #888;
+  }
+}
