@@ -31,6 +31,14 @@ export interface LDDevtoolsHook {
   onSdkReady: (info: SdkReadyInfo) => void;
   /** Called by the bridge plugin to receive override commands. */
   subscribeToOverrides: (listener: OverrideListener) => Unsubscribe;
+  /** Called by the bridge plugin when the LD SDK's flag set changes. */
+  notifyFlagsChanged: (snapshot: FlagsSnapshot) => void;
+}
+
+export interface FlagsSnapshot {
+  /** Wall-clock timestamp the snapshot was taken. */
+  timestamp: number;
+  flags: Array<{ key: string; value: unknown }>;
 }
 
 export interface SdkReadyInfo {
@@ -72,6 +80,18 @@ const hook: LDDevtoolsHook = {
     return () => {
       overrideListeners.delete(listener);
     };
+  },
+
+  notifyFlagsChanged(snapshot) {
+    window.postMessage(
+      {
+        source: PROTOCOL,
+        direction: "from-page",
+        type: "flags-snapshot",
+        snapshot,
+      },
+      window.location.origin,
+    );
   },
 };
 

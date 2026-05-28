@@ -227,9 +227,99 @@ body {
 }
 
 .ld-btn.icon:hover {
+  background: rgba(64, 107, 242, 0.1);
+  color: #406bf2;
+  border-color: rgba(64, 107, 242, 0.3);
+}
+
+.ld-btn.icon.destructive:hover {
   background: rgba(211, 59, 59, 0.1);
   color: #d33b3b;
   border-color: rgba(211, 59, 59, 0.3);
+}
+
+.ld-override-served {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #888;
+  margin-right: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-override-served {
+    color: #999;
+  }
+}
+
+.ld-flag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-flag-list {
+    border-color: #3a3a3a;
+  }
+}
+
+.ld-flag-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-flag-list li {
+    border-bottom-color: #3a3a3a;
+  }
+}
+
+.ld-flag-list li:last-child {
+  border-bottom: none;
+}
+
+.ld-flag-key {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ld-flag-value {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #666;
+  max-width: 200px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ld-flag-value {
+    color: #aaa;
+  }
+}
+
+.ld-flag-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #406bf2;
+  background: rgba(64, 107, 242, 0.12);
+  border-radius: 3px;
+  padding: 2px 6px;
 }
 
 .ld-actions {

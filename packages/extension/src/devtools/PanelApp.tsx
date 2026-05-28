@@ -19,6 +19,15 @@ export function PanelApp() {
   const rpc = usePanelRpc();
   const overridesFromStorage = rpc.tabStatus?.overrides ?? {};
   const pageUrl = rpc.tabStatus?.url;
+  const flagSnapshot = rpc.tabStatus?.flags ?? [];
+
+  const flagValueByKey = useMemo(() => {
+    const map = new Map<string, unknown>();
+    for (const entry of flagSnapshot) {
+      map.set(entry.key, entry.value);
+    }
+    return map;
+  }, [flagSnapshot]);
   const [flagKey, setFlagKey] = useState("");
   const [valueText, setValueText] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
@@ -141,21 +150,34 @@ export function PanelApp() {
           </div>
         ) : (
           <ul className="ld-override-list">
-            {overrideEntries.map(([key, value]) => (
-              <li key={key}>
-                <span className="ld-override-key">{key}</span>
-                <span className="ld-override-value">{JSON.stringify(value)}</span>
-                <button
-                  type="button"
-                  className="ld-btn icon"
-                  aria-label={`Remove override for ${key}`}
-                  onClick={() => handleRemove(key)}
-                  title="Remove override"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+            {overrideEntries.map(([key, value]) => {
+              const sdkValue = flagValueByKey.get(key);
+              return (
+                <li key={key}>
+                  <span className="ld-override-key">{key}</span>
+                  <span className="ld-override-value">
+                    {JSON.stringify(value)}
+                  </span>
+                  {flagValueByKey.has(key) && (
+                    <span
+                      className="ld-override-served"
+                      title="SDK currently serves this value with the override applied"
+                    >
+                      served: {JSON.stringify(sdkValue)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="ld-btn icon destructive"
+                    aria-label={`Remove override for ${key}`}
+                    onClick={() => handleRemove(key)}
+                    title="Remove override"
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -170,7 +192,15 @@ export function PanelApp() {
             onChange={(e) => setFlagKey(e.target.value)}
             spellCheck={false}
             autoCapitalize="off"
+            list="ld-flag-keys"
           />
+          <datalist id="ld-flag-keys">
+            {flagSnapshot.map((flag) => (
+              <option key={flag.key} value={flag.key}>
+                {JSON.stringify(flag.value)}
+              </option>
+            ))}
+          </datalist>
           <input
             type="text"
             placeholder='value (true, "hello", 42, {"k":1})'
@@ -192,6 +222,45 @@ export function PanelApp() {
           <code>{`{"theme":"dark"}`}</code>.
         </div>
       </div>
+
+      {flagSnapshot.length > 0 && (
+        <div className="ld-section">
+          <h2>SDK flags ({flagSnapshot.length})</h2>
+          <ul className="ld-flag-list">
+            {flagSnapshot.map((flag) => {
+              const overridden = Object.prototype.hasOwnProperty.call(
+                overridesFromStorage,
+                flag.key,
+              );
+              return (
+                <li key={flag.key}>
+                  <span className="ld-flag-key">{flag.key}</span>
+                  <span className="ld-flag-value">
+                    {JSON.stringify(flag.value)}
+                  </span>
+                  {overridden && (
+                    <span className="ld-flag-badge" title="Override is active">
+                      override
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="ld-btn icon"
+                    onClick={() => {
+                      setFlagKey(flag.key);
+                      setValueText(JSON.stringify(flag.value));
+                    }}
+                    title="Prefill the form with this flag"
+                    aria-label={`Edit ${flag.key}`}
+                  >
+                    ✎
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div className="ld-section ld-actions">
         <button

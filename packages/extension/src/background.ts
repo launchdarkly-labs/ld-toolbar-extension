@@ -23,6 +23,9 @@ interface TabEntry {
   url?: string;
   sdkInfo?: unknown;
   loadedAt: number;
+  /** Latest flag snapshot reported by the bridge plugin in this tab. */
+  flags?: Array<{ key: string; value: unknown }>;
+  flagsTimestamp?: number;
 }
 
 type OverridesByOrigin = Record<string, Record<string, unknown>>;
@@ -76,6 +79,18 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     // Restore any persisted overrides for this origin and push status.
     void restoreStoredOverrides(tabId);
     pushTabStatus(tabId);
+  } else if (message.type === "flags-snapshot") {
+    const entry: TabEntry = tabs.get(tabId) ?? { loadedAt: Date.now() };
+    const snap = message.snapshot as
+      | { timestamp?: number; flags?: Array<{ key: string; value: unknown }> }
+      | undefined;
+    if (snap && Array.isArray(snap.flags)) {
+      entry.flags = snap.flags;
+      entry.flagsTimestamp = snap.timestamp;
+      entry.url = sender.tab?.url ?? entry.url;
+      tabs.set(tabId, entry);
+      pushTabStatus(tabId);
+    }
   }
 });
 
@@ -264,6 +279,7 @@ async function pushTabStatus(tabId: number): Promise<void> {
       origin,
       sdkInfo: entry?.sdkInfo,
       overrides,
+      flags: entry?.flags ?? [],
     });
   } catch (err) {
     // eslint-disable-next-line no-console

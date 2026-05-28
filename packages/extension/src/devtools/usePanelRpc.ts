@@ -17,6 +17,11 @@ export interface SdkInfo {
   applicationVersion?: string;
 }
 
+export interface FlagSnapshotEntry {
+  key: string;
+  value: unknown;
+}
+
 export interface TabStatusMessage {
   type: "tab-status";
   tabId: number;
@@ -25,6 +30,8 @@ export interface TabStatusMessage {
   sdkInfo?: SdkInfo;
   /** Overrides persisted in chrome.storage.local for this tab's origin. */
   overrides?: Record<string, unknown>;
+  /** Latest flag snapshot reported by the bridge plugin. */
+  flags?: FlagSnapshotEntry[];
 }
 
 interface InboundEnvelope {

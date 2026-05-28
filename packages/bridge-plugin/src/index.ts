@@ -28,6 +28,12 @@ interface LDDevtoolsHookShape {
   subscribeToOverrides?: (
     listener: (msg: OverrideMessage) => void,
   ) => () => void;
+  notifyFlagsChanged?: (snapshot: FlagsSnapshot) => void;
+}
+
+interface FlagsSnapshot {
+  timestamp: number;
+  flags: Array<{ key: string; value: unknown }>;
 }
 
 interface SdkReadyInfo {
@@ -59,9 +65,12 @@ type OverrideMessage =
 export class ExtensionBridgePlugin implements LDPlugin {
   private debugOverride: LDDebugOverride | null = null;
   private ldClient: LDClient | null = null;
+  private hook: LDDevtoolsHookShape | null = null;
   private envMetadata: LDPluginEnvironmentMetadata | null = null;
   private overrides: Map<string, LDFlagValue> = new Map();
   private unsubscribeFromHook: (() => void) | null = null;
+  private flagChangeHandler: ((changes: unknown) => void) | null = null;
+  private readyHandler: (() => void) | null = null;
   private readonly config: Required<ExtensionBridgePluginConfig>;
 
   constructor(config: ExtensionBridgePluginConfig = {}) {
@@ -210,6 +219,29 @@ export class ExtensionBridgePlugin implements LDPlugin {
       }
       this.unsubscribeFromHook = null;
     }
+    if (this.ldClient) {
+      if (this.flagChangeHandler) {
+        try {
+          (this.ldClient as unknown as {
+            off: (event: string, handler: unknown) => void;
+          }).off("change", this.flagChangeHandler);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (this.readyHandler) {
+        try {
+          (this.ldClient as unknown as {
+            off: (event: string, handler: unknown) => void;
+          }).off("ready", this.readyHandler);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    this.flagChangeHandler = null;
+    this.readyHandler = null;
+    this.hook = null;
   }
 
   private connectToExtensionIfPresent(): void {
@@ -219,6 +251,8 @@ export class ExtensionBridgePlugin implements LDPlugin {
       HOOK_GLOBAL
     ] as LDDevtoolsHookShape | undefined;
     if (!hook) return;
+
+    this.hook = hook;
 
     // eslint-disable-next-line no-console
     console.info(
@@ -255,6 +289,70 @@ export class ExtensionBridgePlugin implements LDPlugin {
           error,
         );
       }
+    }
+
+    // Subscribe to SDK flag changes so the panel can show real keys
+    // and values. Both 'ready' (initial values) and 'change' (deltas).
+    this.subscribeToSdkFlagChanges();
+  }
+
+  private subscribeToSdkFlagChanges(): void {
+    if (!this.ldClient || !this.hook) return;
+    const clientWithEvents = this.ldClient as unknown as {
+      on?: (event: string, handler: unknown) => void;
+    };
+    if (typeof clientWithEvents.on !== "function") return;
+
+    this.readyHandler = () => this.pushFlagSnapshot();
+    this.flagChangeHandler = () => this.pushFlagSnapshot();
+
+    try {
+      clientWithEvents.on("ready", this.readyHandler);
+      clientWithEvents.on("change", this.flagChangeHandler);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[ExtensionBridgePlugin] Failed to subscribe to SDK flag events:",
+        error,
+      );
+    }
+
+    // Push immediately in case the SDK is already ready (the 'ready'
+    // event won't re-fire if it already happened).
+    this.pushFlagSnapshot();
+  }
+
+  private pushFlagSnapshot(): void {
+    if (!this.hook || typeof this.hook.notifyFlagsChanged !== "function") return;
+    if (!this.ldClient) return;
+
+    let allFlags: Record<string, unknown>;
+    try {
+      allFlags = (
+        this.ldClient as unknown as {
+          allFlags: () => Record<string, unknown>;
+        }
+      ).allFlags();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ExtensionBridgePlugin] Failed to read flag snapshot:",
+        error,
+      );
+      return;
+    }
+
+    try {
+      this.hook.notifyFlagsChanged({
+        timestamp: Date.now(),
+        flags: Object.entries(allFlags).map(([key, value]) => ({ key, value })),
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[ExtensionBridgePlugin] Failed to push flag snapshot:",
+        error,
+      );
     }
   }
 

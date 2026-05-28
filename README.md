@@ -294,7 +294,6 @@ Run `npm install` (or your equivalent) in the host app. After rebuilding the bri
 What's intentionally **not** in v0, in rough priority order:
 
 - **Bidirectional sync.** The panel UI currently shows only what is in storage. If you also use `window.__ldBridge.setOverride(...)` from the page console, the panel doesn't reflect it. Add a reverse channel.
-- **Flag discovery.** Bridge plugin reports available flag keys to the panel so users can pick from a list instead of typing keys by hand.
 - **Per-context overrides.** Maintain different override sets for different LD contexts.
 - **Chrome Web Store / Edge Add-ons / Firefox.** Currently sideload-only.
 - **Browser action popup** (not just DevTools panel).
