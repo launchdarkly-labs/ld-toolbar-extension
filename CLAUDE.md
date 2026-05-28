@@ -6,7 +6,7 @@ Chrome-extension version of the LaunchDarkly Dev Toolbar. **Completely independe
 2. No LaunchDarkly login required.
 3. No floating UI in the host app — UI lives in the Chrome extension (DevTools panel).
 
-See `PLAN.md` for full architecture and decisions.
+See `README.md` for the public-facing architecture overview and roadmap.
 
 ## Workspace layout
 
@@ -14,7 +14,6 @@ pnpm workspace. `packageManager: pnpm@10.14.0` is pinned. Use `corepack pnpm <cm
 
 ```
 ld-toolbar-extension/
-├── PLAN.md
 ├── CLAUDE.md                                   ← this file
 ├── LICENSE                                     (Apache 2.0)
 ├── package.json                                (workspace root)
@@ -62,13 +61,9 @@ corepack pnpm run typecheck  # tsc --noEmit
 
 After rebuilding, Vite picks up the new dist files automatically via the symlinked `node_modules/@launchdarkly/toolbar-extension-bridge` in weather-demo.
 
-## What's next (per PLAN.md, in order)
+## What's next
 
-Steps 1-5 done. Bridge plugin + extension + DevTools panel + persistence all live and validated.
-
-6. **Share-state URL emit/receive** (in progress). Sender encodes overrides as `?ld-ext-state=<base64-json>`, extension consumes and applies; nothing touches the host page's localStorage.
-7. **Bidirectional sync.** Panel reflects overrides set via `window.__ldBridge` directly.
-8. **Flag discovery.** Bridge plugin reports available flag keys for the panel UI.
+Core v0 shipped: bridge plugin, MV3 extension with DevTools panel, port-based RPC, per-origin persistence, share-link emit/receive, flag discovery, and bidirectional sync. See README "Roadmap" section for what's still outstanding (per-context overrides, Web Store distribution, browser action popup, event interception view, automated tests, visual polish).
 
 ## Reference material (open while coding)
 

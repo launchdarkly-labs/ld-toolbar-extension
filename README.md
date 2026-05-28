@@ -204,7 +204,6 @@ No localStorage write anywhere on the page side. The override survives until the
 ```
 ld-toolbar-extension/
 ├── README.md
-├── PLAN.md                                    Architecture + roadmap (deep dive)
 ├── CLAUDE.md                                  Notes for AI-assisted development
 ├── LICENSE                                    Apache 2.0
 ├── package.json                               pnpm workspace root
@@ -300,11 +299,12 @@ Run `npm install` (or your equivalent) in the host app. After rebuilding the bri
 
 What's intentionally **not** in v0, in rough priority order:
 
-- **Per-context overrides.** Maintain different override sets for different LD contexts (currently per-origin only).
-- **Per-context overrides.** Maintain different override sets for different LD contexts.
+- **Per-context overrides.** Maintain different override sets for different LD contexts (currently scoped per-origin only).
 - **Chrome Web Store / Edge Add-ons / Firefox.** Currently sideload-only.
-- **Browser action popup** (not just DevTools panel).
-- **Event interception view** (parity with the official toolbar's event log).
+- **Browser action popup** as an alternative entry point (not just the DevTools panel).
+- **Event interception view** for parity with the official toolbar's event log.
+- **Automated tests.** Unit coverage on the bridge plugin (plugin lifecycle, override precedence, hook detection, message handling) and Playwright end-to-end coverage of the panel ↔ background ↔ bridge round-trip.
+- **Light visual polish** on the DevTools panel — tighter spacing, keyboard shortcuts, empty-state copy.
 
 If you need any of these and want to contribute, open an issue first to discuss the approach.
 
