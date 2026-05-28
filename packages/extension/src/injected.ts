@@ -33,6 +33,13 @@ export interface LDDevtoolsHook {
   subscribeToOverrides: (listener: OverrideListener) => Unsubscribe;
   /** Called by the bridge plugin when the LD SDK's flag set changes. */
   notifyFlagsChanged: (snapshot: FlagsSnapshot) => void;
+  /**
+   * Called by the bridge plugin whenever its in-memory override map
+   * changes for any reason — including changes driven by direct
+   * `bridge.setOverride()` calls from page code (not just from the
+   * extension). Lets the panel stay in sync.
+   */
+  notifyOverridesChanged: (overrides: Record<string, unknown>) => void;
 }
 
 export interface FlagsSnapshot {
@@ -89,6 +96,18 @@ const hook: LDDevtoolsHook = {
         direction: "from-page",
         type: "flags-snapshot",
         snapshot,
+      },
+      window.location.origin,
+    );
+  },
+
+  notifyOverridesChanged(overrides) {
+    window.postMessage(
+      {
+        source: PROTOCOL,
+        direction: "from-page",
+        type: "overrides-snapshot",
+        overrides,
       },
       window.location.origin,
     );

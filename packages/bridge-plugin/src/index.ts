@@ -29,6 +29,7 @@ interface LDDevtoolsHookShape {
     listener: (msg: OverrideMessage) => void,
   ) => () => void;
   notifyFlagsChanged?: (snapshot: FlagsSnapshot) => void;
+  notifyOverridesChanged?: (overrides: Record<string, unknown>) => void;
 }
 
 interface FlagsSnapshot {
@@ -148,6 +149,8 @@ export class ExtensionBridgePlugin implements LDPlugin {
         );
       }
     }
+
+    this.notifyExtensionOfOverrides();
   }
 
   /**
@@ -174,6 +177,8 @@ export class ExtensionBridgePlugin implements LDPlugin {
         );
       }
     }
+
+    this.notifyExtensionOfOverrides();
   }
 
   /** Remove every override. */
@@ -191,6 +196,8 @@ export class ExtensionBridgePlugin implements LDPlugin {
         );
       }
     }
+
+    this.notifyExtensionOfOverrides();
   }
 
   /** Snapshot of the current in-memory overrides. */
@@ -320,6 +327,25 @@ export class ExtensionBridgePlugin implements LDPlugin {
     // Push immediately in case the SDK is already ready (the 'ready'
     // event won't re-fire if it already happened).
     this.pushFlagSnapshot();
+  }
+
+  private notifyExtensionOfOverrides(): void {
+    if (!this.hook || typeof this.hook.notifyOverridesChanged !== "function") {
+      return;
+    }
+    const snapshot: Record<string, unknown> = {};
+    for (const [key, value] of this.overrides) {
+      snapshot[key] = value;
+    }
+    try {
+      this.hook.notifyOverridesChanged(snapshot);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[ExtensionBridgePlugin] Failed to notify extension of override change:",
+        error,
+      );
+    }
   }
 
   private pushFlagSnapshot(): void {

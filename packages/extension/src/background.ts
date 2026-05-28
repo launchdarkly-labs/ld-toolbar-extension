@@ -79,6 +79,16 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     // Restore any persisted overrides for this origin and push status.
     void restoreStoredOverrides(tabId);
     pushTabStatus(tabId);
+  } else if (message.type === "overrides-snapshot") {
+    // Bridge plugin is telling us its current override state. Replace
+    // storage for this origin to match — this handles overrides set
+    // directly via window.__ldBridge from page code as well as the
+    // round-trip echo from extension-driven changes.
+    void handleOverridesSnapshot(
+      tabId,
+      sender.tab?.url,
+      message.overrides,
+    );
   } else if (message.type === "flags-snapshot") {
     const entry: TabEntry = tabs.get(tabId) ?? { loadedAt: Date.now() };
     const snap = message.snapshot as
@@ -193,6 +203,29 @@ async function handlePanelOverrideCommand(
   }
 
   // Echo the new status back to the panel so its UI reflects storage.
+  pushTabStatus(tabId);
+}
+
+async function handleOverridesSnapshot(
+  tabId: number,
+  url: string | undefined,
+  overrides: unknown,
+): Promise<void> {
+  const origin = originFromUrl(url);
+  if (!origin) return;
+  if (overrides === null || overrides === undefined) return;
+  if (typeof overrides !== "object") return;
+
+  const snapshot = overrides as Record<string, unknown>;
+  try {
+    await replaceOverridesForOrigin(origin, snapshot);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[LD Toolbar Extension] failed to persist override snapshot for tab ${tabId}:`,
+      err,
+    );
+  }
   pushTabStatus(tabId);
 }
 
@@ -314,6 +347,19 @@ async function getOverridesForOrigin(
 ): Promise<Record<string, unknown>> {
   const all = await getAllStoredOverrides();
   return all[origin] ?? {};
+}
+
+async function replaceOverridesForOrigin(
+  origin: string,
+  overrides: Record<string, unknown>,
+): Promise<void> {
+  const all = await getAllStoredOverrides();
+  if (Object.keys(overrides).length === 0) {
+    delete all[origin];
+  } else {
+    all[origin] = { ...overrides };
+  }
+  await chrome.storage.local.set({ [STORAGE_KEY]: all });
 }
 
 async function mergeOverridesForOrigin(
