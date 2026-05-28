@@ -1,0 +1,12 @@
+{
+  "name": "ld-toolbar-extension",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Chrome extension version of the LaunchDarkly Dev Toolbar (no localStorage, no login, no in-page UI)",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev"
+  }
+}
