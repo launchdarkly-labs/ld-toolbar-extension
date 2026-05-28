@@ -21,6 +21,27 @@ export interface ExtensionBridgePluginConfig {
   exposeOnWindow?: boolean;
 }
 
+interface LDDevtoolsHookShape {
+  version: number;
+  extensionVersion?: string;
+  onSdkReady?: (info: SdkReadyInfo) => void;
+  subscribeToOverrides?: (
+    listener: (msg: OverrideMessage) => void,
+  ) => () => void;
+}
+
+interface SdkReadyInfo {
+  sdkName?: string;
+  sdkVersion?: string;
+  clientSideId?: string;
+  applicationId?: string;
+  applicationVersion?: string;
+}
+
+type OverrideMessage =
+  | { type: "set-overrides"; overrides: Record<string, LDFlagValue> }
+  | { type: "clear-overrides" };
+
 /**
  * SDK plugin that lets the LaunchDarkly Dev Toolbar Chrome extension drive
  * flag overrides without touching localStorage or rendering UI into the host
@@ -31,12 +52,15 @@ export interface ExtensionBridgePluginConfig {
  * official FlagOverridePlugin uses internally, just without the persistence.
  *
  * Works standalone (call `setOverride(key, value)` directly from app or test
- * code) and also picks up commands from the extension when present.
+ * code) and also picks up commands from the extension via
+ * `window.__LD_DEVTOOLS_HOOK__` when present.
  */
 export class ExtensionBridgePlugin implements LDPlugin {
   private debugOverride: LDDebugOverride | null = null;
   private ldClient: LDClient | null = null;
+  private envMetadata: LDPluginEnvironmentMetadata | null = null;
   private overrides: Map<string, LDFlagValue> = new Map();
+  private unsubscribeFromHook: (() => void) | null = null;
   private readonly config: Required<ExtensionBridgePluginConfig>;
 
   constructor(config: ExtensionBridgePluginConfig = {}) {
@@ -53,34 +77,22 @@ export class ExtensionBridgePlugin implements LDPlugin {
     return { name: PLUGIN_NAME };
   }
 
-  getHooks(_metadata: LDPluginEnvironmentMetadata): Hook[] {
+  getHooks(metadata: LDPluginEnvironmentMetadata): Hook[] {
+    this.envMetadata = metadata;
     return [];
   }
 
   register(ldClient: LDClient): void {
     this.ldClient = ldClient;
-
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const hook = (window as unknown as Record<string, unknown>)[HOOK_GLOBAL];
-    if (hook) {
-      // Extension is installed. Transport wiring will live here in a later
-      // slice — for now we just record presence so the console can see it.
-      // eslint-disable-next-line no-console
-      console.info(
-        "[ExtensionBridgePlugin] Dev Toolbar extension detected",
-        hook,
-      );
-    }
+    this.connectToExtensionIfPresent();
   }
 
   registerDebug(debugOverride: LDDebugOverride): void {
     this.debugOverride = debugOverride;
 
     // Replay any overrides that were set before the SDK's debug interface
-    // became available (e.g., setOverride called immediately after construct).
+    // became available (e.g., setOverride called immediately after construct,
+    // or overrides delivered by the extension before registerDebug fired).
     for (const [flagKey, value] of this.overrides) {
       try {
         debugOverride.setOverride(flagKey, value);
@@ -183,5 +195,75 @@ export class ExtensionBridgePlugin implements LDPlugin {
   /** The LDClient the SDK passed in at register(). Null before that. */
   getClient(): LDClient | null {
     return this.ldClient;
+  }
+
+  /**
+   * Detach from the extension hook. Useful in tests and during HMR.
+   */
+  disconnect(): void {
+    if (this.unsubscribeFromHook) {
+      try {
+        this.unsubscribeFromHook();
+      } catch {
+        /* ignore */
+      }
+      this.unsubscribeFromHook = null;
+    }
+  }
+
+  private connectToExtensionIfPresent(): void {
+    if (typeof window === "undefined") return;
+
+    const hook = (window as unknown as Record<string, unknown>)[
+      HOOK_GLOBAL
+    ] as LDDevtoolsHookShape | undefined;
+    if (!hook) return;
+
+    // eslint-disable-next-line no-console
+    console.info(
+      "[ExtensionBridgePlugin] Dev Toolbar extension detected",
+      hook,
+    );
+
+    // Announce ourselves with whatever environment info we have.
+    if (typeof hook.onSdkReady === "function") {
+      try {
+        hook.onSdkReady({
+          sdkName: this.envMetadata?.sdk?.name,
+          sdkVersion: this.envMetadata?.sdk?.version,
+          clientSideId: this.envMetadata?.clientSideId,
+          applicationId: this.envMetadata?.application?.id,
+          applicationVersion: this.envMetadata?.application?.version,
+        });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[ExtensionBridgePlugin] onSdkReady threw:", error);
+      }
+    }
+
+    // Subscribe to override commands from the extension.
+    if (typeof hook.subscribeToOverrides === "function") {
+      try {
+        this.unsubscribeFromHook = hook.subscribeToOverrides((msg) => {
+          this.handleExtensionMessage(msg);
+        });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[ExtensionBridgePlugin] Failed to subscribe to extension overrides:",
+          error,
+        );
+      }
+    }
+  }
+
+  private handleExtensionMessage(msg: OverrideMessage): void {
+    if (msg.type === "set-overrides") {
+      for (const [key, value] of Object.entries(msg.overrides)) {
+        this.setOverride(key, value);
+      }
+    } else if (msg.type === "clear-overrides") {
+      this.clearAllOverrides();
+    }
   }
 }

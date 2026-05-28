@@ -19,5 +19,10 @@ export default defineManifest({
       run_at: "document_start",
       world: "MAIN",
     },
+    {
+      matches: ["<all_urls>"],
+      js: ["src/content-script.ts"],
+      run_at: "document_start",
+    },
   ],
 });

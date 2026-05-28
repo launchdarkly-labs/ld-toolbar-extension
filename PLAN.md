@@ -184,10 +184,12 @@ Build order:
 Out of scope for v0 (parking lot):
 - Browser action popup (devtools is enough for now)
 - Contexts / context switching
-- Share-state URLs
 - Event interception / evaluation log
 - Firefox / non-Chrome
 - Tooltips, theming, polish
+
+**Shareable state (deferred — design noted here):**
+Both parties have the extension installed (this is acceptable for the target audience). Sender clicks "Share" in the DevTools panel → extension serializes current overrides into a URL param like `?ld-ext-state=<base64-json>`. Sender copies the URL, shares it. Recipient (also has extension) opens the URL → extension's content script reads the param, writes to `chrome.storage.local`, sends override message to the bridge plugin via the RPC channel. **The page's `localStorage` is never touched** because the URL param is consumed by the extension, not by any page JS. Build this after the core RPC + DevTools panel is validated end-to-end.
 
 ## Testing strategy
 
