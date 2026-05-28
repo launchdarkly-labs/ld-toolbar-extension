@@ -1,20 +1,22 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePanelRpc } from "./usePanelRpc";
 
 /**
  * v0 panel UI.
  *
- * Local-only override state: the panel maintains its own map of what it
- * has pushed to the page. The page-side bridge plugin is the source of
- * truth at runtime, but for v0 we don't subscribe to changes there —
- * if you use `window.__ldBridge.setOverride(...)` from the page console
- * the panel won't reflect it until we add bidirectional sync in a later
- * slice. Adequate for the typical workflow where overrides are set from
- * here.
+ * Override state comes from chrome.storage.local, scoped per-origin, and
+ * is pushed to the panel by the background SW via tab-status messages.
+ * The panel renders that state directly — we no longer maintain a
+ * separate optimistic copy.
+ *
+ * The page-side bridge plugin is the runtime source of truth, but we
+ * don't subscribe to changes there for v0. If you use
+ * `window.__ldBridge.setOverride(...)` directly from the page console
+ * the panel won't reflect it (bidirectional sync is a later slice).
  */
 export function PanelApp() {
   const rpc = usePanelRpc();
-  const [localOverrides, setLocalOverrides] = useState<Record<string, unknown>>({});
+  const overridesFromStorage = rpc.tabStatus?.overrides ?? {};
   const [flagKey, setFlagKey] = useState("");
   const [valueText, setValueText] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
@@ -23,9 +25,15 @@ export function PanelApp() {
   const sdkInfo = rpc.tabStatus?.sdkInfo;
 
   const overrideEntries = useMemo(
-    () => Object.entries(localOverrides),
-    [localOverrides],
+    () => Object.entries(overridesFromStorage),
+    [overridesFromStorage],
   );
+
+  // Clear the form errors whenever the persisted state arrives or changes
+  // so stale validation messages don't linger after a successful add.
+  useEffect(() => {
+    setValueError(null);
+  }, [overridesFromStorage]);
 
   const handleAdd = (e: FormEvent) => {
     e.preventDefault();
@@ -44,19 +52,15 @@ export function PanelApp() {
     }
 
     rpc.setOverride(trimmedKey, parsed.value);
-    setLocalOverrides((prev) => ({ ...prev, [trimmedKey]: parsed.value }));
     setFlagKey("");
     setValueText("");
   };
 
   const handleRemove = (key: string) => {
-    const { [key]: _removed, ...rest } = localOverrides;
-    setLocalOverrides(rest);
     rpc.removeOverride(key);
   };
 
   const handleClearAll = () => {
-    setLocalOverrides({});
     rpc.clearOverrides();
   };
 

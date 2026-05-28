@@ -21,7 +21,10 @@ export interface TabStatusMessage {
   type: "tab-status";
   tabId: number;
   url?: string;
+  origin?: string | null;
   sdkInfo?: SdkInfo;
+  /** Overrides persisted in chrome.storage.local for this tab's origin. */
+  overrides?: Record<string, unknown>;
 }
 
 interface InboundEnvelope {

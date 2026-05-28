@@ -178,7 +178,7 @@ Build order:
 2. **Hook shim + content script.** Manifest at MV3, content script at `document_start`, injects `window.__LD_DEVTOOLS_HOOK__`. Bridge plugin detects it and dispatches `sdk-ready`. Verify in the console.
 3. **Background service worker + port-based RPC.** Tab registry, port plumbing. Background knows which tabs have LD active.
 4. **DevTools panel UI.** Flat list of flags from the latest `flags-snapshot`. Each row has a value input. Setting a value sends `set-overrides` down the channel.
-5. **Persistence via `chrome.storage.local`.** Per-origin scoping. Hydrate overrides on tab load and re-send to bridge plugin.
+5. **Persistence via `chrome.storage.local`.** ✅ Done. Per-origin scoping (`new URL(tab.url).origin`). Storage shape: `{ overrides: { "<origin>": { "<flagKey>": <value> } } }`. Background SW updates storage on every panel-driven set/remove/clear and re-sends stored overrides to the page on `sdk-ready`. Panel hydrates from storage via the `tab-status` push.
 6. **End-to-end smoke** in `weather-demo`: install extension unpacked, open DevTools panel, override a flag, see it apply.
 
 Out of scope for v0 (parking lot):

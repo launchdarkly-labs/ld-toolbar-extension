@@ -64,11 +64,11 @@ After rebuilding, Vite picks up the new dist files automatically via the symlink
 
 ## What's next (per PLAN.md, in order)
 
-2. **Hook shim + content script.** MV3 manifest, content script at `document_start`, injects `window.__LD_DEVTOOLS_HOOK__`. Bridge plugin detects it, dispatches `sdk-ready` CustomEvent.
-3. **Background service worker + port-based RPC.** Tab registry, port plumbing.
-4. **DevTools panel UI.** Flat list of flags from `flags-snapshot`. Override inputs.
-5. **Persistence via `chrome.storage.local`** (per-origin scope).
-6. **End-to-end smoke** in weather-demo.
+Steps 1-5 done. Bridge plugin + extension + DevTools panel + persistence all live and validated.
+
+6. **Share-state URL emit/receive** (in progress). Sender encodes overrides as `?ld-ext-state=<base64-json>`, extension consumes and applies; nothing touches the host page's localStorage.
+7. **Bidirectional sync.** Panel reflects overrides set via `window.__ldBridge` directly.
+8. **Flag discovery.** Bridge plugin reports available flag keys for the panel UI.
 
 ## Reference material (open while coding)
 
