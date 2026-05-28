@@ -75,7 +75,7 @@ You should see **LaunchDarkly Toolbar Extension** in the list. (Chrome Web Store
 
 The bridge plugin works with **any** browser-side LaunchDarkly SDK that supports the `plugins` config option (JS Client v3.6.0+ — which includes React, Vue, and Angular wrappers).
 
-> **Installation:** `@launchdarkly/toolbar-extension-bridge` is **not yet published to npm**. You can still install it directly from this repository today using one of the two methods below. The published name is reserved for a future release; once it lands on npm, the integration code (the `import` lines and the SDK config) won't change.
+> **Installation:** `@launchdarkly/toolbar-extension-bridge` is **not yet published to npm**. You can still install it directly from this repository today using one of the two methods below. If/when it lands on npm later, the integration code (the `import` lines and the SDK config) won't change.
 >
 > **Option A — local file path (best for development / iteration):**
 > Clone this repo somewhere on your machine, then add the dep in your app's `package.json`:
@@ -160,10 +160,13 @@ That's the entire integration. The plugin auto-detects whether the Chrome extens
 The bridge plugin exposes a small API on the instance you create. Useful for Playwright/Cypress tests, console debugging, or driving overrides from your own code:
 
 ```ts
+import { initialize } from "launchdarkly-js-client-sdk";
+import { ExtensionBridgePlugin } from "@launchdarkly/toolbar-extension-bridge";
+
 const bridge = new ExtensionBridgePlugin();
 
 // In your SDK config:
-new LDClient(..., { plugins: [bridge] });
+const client = initialize(clientSideId, context, { plugins: [bridge] });
 
 // Then from app code, tests, or the console:
 bridge.setOverride("my-flag", true);
@@ -228,7 +231,7 @@ If you're integrating, debugging, or extending the project, this section covers 
 6. Bridge plugin calls `debugOverride.setOverride(flagKey, value)` on the SDK.
 7. Next `variation()` call returns the override.
 
-No localStorage write anywhere on the page side. The override survives until the bridge plugin is cleared, the page reloads, or the override is removed. (Persistence across reloads — re-sending the saved overrides from `chrome.storage.local` after page reload — is on the roadmap.)
+No localStorage write anywhere on the page side. Each change is also persisted into `chrome.storage.local` keyed by the page's origin, so overrides survive page reloads: when the SDK announces ready on the next load, the background SW looks up the saved overrides for that origin and pushes them back down through the same chain. Sending a share link uses the same persistence path on the recipient's end — see [Quick start, step 3](#3-use-it) point 6.
 
 ## Project structure
 
@@ -249,15 +252,18 @@ ld-toolbar-extension/
         ├── src/
         │   ├── injected.ts                    MAIN-world script: sets the hook
         │   ├── content-script.ts              ISOLATED-world script: postMessage ↔ runtime bridge
-        │   ├── background.ts                  Service worker: tab registry + RPC
-        │   └── devtools/
-        │       ├── devtools.html              Hidden DevTools entry point
-        │       ├── devtools.ts                Calls chrome.devtools.panels.create
-        │       ├── panel.html                 The visible panel iframe
-        │       ├── panel.tsx                  React entry
-        │       ├── PanelApp.tsx               Panel UI
-        │       ├── usePanelRpc.ts             Port-based RPC hook
-        │       └── panel.css
+        │   ├── background.ts                  Service worker: tab registry + RPC + storage
+        │   ├── devtools/
+        │   │   ├── devtools.html              Hidden DevTools entry point
+        │   │   ├── devtools.ts                Calls chrome.devtools.panels.create
+        │   │   ├── panel.html                 The visible panel iframe
+        │   │   ├── panel.tsx                  React entry
+        │   │   ├── PanelApp.tsx               Panel UI
+        │   │   ├── usePanelRpc.ts             Port-based RPC hook
+        │   │   └── panel.css
+        │   └── shared/
+        │       └── shareState.ts              Base64 codec + URL helpers used by both
+        │                                      the panel and the content script
         ├── vite.config.ts
         └── package.json
 ```
