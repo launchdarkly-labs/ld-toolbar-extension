@@ -8,13 +8,15 @@ A Chrome extension + lightweight SDK plugin for overriding LaunchDarkly feature 
 
 ## Why this exists
 
-The existing `@launchdarkly/toolbar` solves the same flag-override problem brilliantly for most teams, but three real-world constraints aren't well-served by it:
+The official [`@launchdarkly/toolbar`](https://docs.launchdarkly.com/home/getting-started/dev-toolbar) is the right tool for most teams — it's actively developed by LaunchDarkly, ships a rich UI directly into the app, integrates with the LaunchDarkly product, and covers a lot more than just flag overrides (contexts, event interception, observability, session replay). If you don't have any specific constraints below, **use the official toolbar.**
 
-1. **Some apps restrict `localStorage` / `sessionStorage` / cookies on their own origin** (security policy, compliance requirements, embedded environments). The official toolbar's override mechanism is backed by `localStorage`, so it can't be used there.
-2. **The official toolbar's full feature set requires a LaunchDarkly login** for the dev using it. That's reasonable for the in-product experience, but it adds friction when all you want to do is force a flag variation for QA.
-3. **The official toolbar renders a floating button into the host app's DOM.** That's exactly what you want most of the time, but it makes "validate flags in production without anything end-users could see" awkward — the button is visible.
+This project exists for a narrower set of scenarios where the official toolbar's design choices don't fit:
 
-This project gives up most of the official toolbar's feature breadth (event interception, context switching, share-state URLs, etc.) in exchange for hitting all three constraints. It's a focused tool: override a flag value, see the effect, move on.
+1. **Apps that can't write to `localStorage` / `sessionStorage` / cookies on their own origin** — security policies, compliance posture, or embedded environments that lock down browser storage. The official toolbar's override mechanism is `localStorage`-backed (correctly — that's the right primitive for an in-page tool), but it means the override path is unavailable when those storage APIs are blocked.
+2. **Workflows where requiring a LaunchDarkly login adds friction** — for example, a QA engineer who needs to force a flag variation but doesn't have a seat in the project, or a contractor working in a sandbox environment. The official toolbar's full UI is gated behind LD authentication for good reasons (it shows project state); this extension trades that integration for a no-auth override-only experience.
+3. **Validating flag behavior in production without any UI visible to end users.** The official toolbar's floating button is the right default — it's how authenticated devs find their tools. For the specific case of "force a flag in prod for 30 seconds to confirm an incident workaround, then revert," moving the UI into Chrome DevTools keeps the host app pixel-identical to what users see.
+
+This project does much less than the official toolbar by design: it focuses tightly on flag overrides and the supporting workflow (persistence, share links, flag discovery), and skips the rest. The two coexist — you can register both plugins in the same SDK config if you want both surfaces available.
 
 ## Architecture at a glance
 
@@ -150,21 +152,26 @@ The programmatic API works **with or without the extension installed**. The exte
 
 ## Comparison to the official `@launchdarkly/toolbar`
 
+These are different tools with overlapping but distinct surface areas. Pick based on what your environment can support and which features you need; the table below is a quick orientation, not a scorecard.
+
 | | Official Dev Toolbar | This (Extension Edition) |
 |---|---|---|
-| Flag overrides | ✅ | ✅ |
-| Override UI | Floating in-page button | Chrome DevTools panel |
-| Storage | `localStorage` (page origin) | In-memory + `chrome.storage.local` (extension sandbox) |
-| Requires LD login | ✅ for full functionality | ❌ no LD account needed |
-| Visible in host app DOM | ✅ floating button | ❌ entirely out-of-page |
-| SDK plugin interface | `LDPlugin` | `LDPlugin` (same) |
+| Flag overrides | Yes | Yes |
+| Override UI surface | In-app floating button | Chrome DevTools panel |
+| Override storage backend | Browser `localStorage` on the page origin | In-memory page-side + `chrome.storage.local` in the extension sandbox |
+| LaunchDarkly login | Required for full functionality (project integration, share state, etc.) | Not used |
+| UI rendered into host app DOM | Yes (floating button) | No |
+| SDK plugin interface | `LDPlugin` | `LDPlugin` (identical contract) |
 | Framework support | JS / React / Vue / Angular | JS / React / Vue / Angular |
-| Context switching | ✅ | ❌ (parking lot) |
-| Event interception | ✅ | ❌ (parking lot) |
-| Share state via URL | ✅ (writes to localStorage) | ✅ (writes to chrome.storage.local; needs extension on both ends) |
-| Distribution | npm + CDN | Sideloaded unpacked extension (v0) |
+| Context switching | Yes | Not in v0 |
+| Event interception / evaluation log | Yes | Not in v0 |
+| Share state via URL | Yes (writes to `localStorage` on receive) | Yes (writes to `chrome.storage.local`; both parties need the extension) |
+| Observability / session replay integration | Yes | No |
+| Distribution | Published npm package + CDN bundle | Sideloaded unpacked Chrome extension (Web Store TBD) |
 
-The two are **independent** — this project doesn't depend on `@launchdarkly/toolbar`. They can coexist in the same app if you want both UIs available.
+Use the **official toolbar** if you have a LaunchDarkly account for everyone who'll use it, your app can write to `localStorage`, and you want the broader feature set. Use **this extension** if any of those don't hold and you just need flag overrides.
+
+The two implementations are independent — this project doesn't depend on `@launchdarkly/toolbar` — and they happily coexist in the same SDK config if you want both surfaces available at once.
 
 ## How it works (deeper)
 
