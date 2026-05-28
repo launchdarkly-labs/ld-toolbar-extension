@@ -65,12 +65,24 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabs.delete(tabId);
 });
 
-// Helper API for manual testing from the SW DevTools console.
-// Once the DevTools panel UI exists this gets replaced by port-based RPC.
+// Helper API for manual testing from the SW DevTools console. Operates on
+// the tab registry we maintain ourselves — using chrome.tabs.query from a
+// SW is unreliable because the SW DevTools window itself becomes the
+// "current"/"last focused" window. Once the DevTools panel UI exists this
+// gets replaced by port-based RPC scoped to whichever tab the panel is
+// inspecting.
 const ldExt = {
+  /** List all tabs we know about (have a loaded content script). */
   listTabs(): Array<[number, TabEntry]> {
     return Array.from(tabs.entries());
   },
+
+  /** List only tabs where the LD SDK has registered. */
+  listSdkTabs(): Array<[number, TabEntry]> {
+    return Array.from(tabs.entries()).filter(([, entry]) => entry.sdkInfo);
+  },
+
+  /** Send overrides to a specific tab. Use this when you know the tab ID. */
   async setOverridesOnTab(
     tabId: number,
     overrides: Record<string, unknown>,
@@ -81,44 +93,61 @@ const ldExt = {
       overrides,
     });
   },
-  async setOverridesOnActiveTab(
-    overrides: Record<string, unknown>,
-  ): Promise<void> {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      // SWs have no "current window" — lastFocusedWindow is the working
-      // equivalent from a background context.
-      lastFocusedWindow: true,
-    });
-    if (!tab?.id) {
-      throw new Error("No active tab in current window");
-    }
-    await chrome.tabs.sendMessage(tab.id, {
-      source: PROTOCOL,
-      type: "set-overrides",
-      overrides,
-    });
+
+  /**
+   * Send overrides to every tab in the registry that has an active SDK.
+   * Convenient when there's only one demo tab open during manual testing.
+   */
+  async setOverrides(overrides: Record<string, unknown>): Promise<number> {
+    const sdkTabs = this.listSdkTabs();
+    await Promise.all(
+      sdkTabs.map(([tabId]) =>
+        chrome.tabs
+          .sendMessage(tabId, {
+            source: PROTOCOL,
+            type: "set-overrides",
+            overrides,
+          })
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[LD Toolbar Extension] failed to send overrides to tab ${tabId}:`,
+              err,
+            );
+          }),
+      ),
+    );
+    return sdkTabs.length;
   },
+
+  /** Clear overrides on a specific tab. */
   async clearOverridesOnTab(tabId: number): Promise<void> {
     await chrome.tabs.sendMessage(tabId, {
       source: PROTOCOL,
       type: "clear-overrides",
     });
   },
-  async clearOverridesOnActiveTab(): Promise<void> {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      // SWs have no "current window" — lastFocusedWindow is the working
-      // equivalent from a background context.
-      lastFocusedWindow: true,
-    });
-    if (!tab?.id) {
-      throw new Error("No active tab in current window");
-    }
-    await chrome.tabs.sendMessage(tab.id, {
-      source: PROTOCOL,
-      type: "clear-overrides",
-    });
+
+  /** Clear overrides on every tab in the registry that has an active SDK. */
+  async clearOverrides(): Promise<number> {
+    const sdkTabs = this.listSdkTabs();
+    await Promise.all(
+      sdkTabs.map(([tabId]) =>
+        chrome.tabs
+          .sendMessage(tabId, {
+            source: PROTOCOL,
+            type: "clear-overrides",
+          })
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[LD Toolbar Extension] failed to clear overrides on tab ${tabId}:`,
+              err,
+            );
+          }),
+      ),
+    );
+    return sdkTabs.length;
   },
 };
 
