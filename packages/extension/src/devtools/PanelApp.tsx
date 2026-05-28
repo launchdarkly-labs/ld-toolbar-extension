@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePanelRpc } from "./usePanelRpc";
+import { buildShareUrl, MAX_PAYLOAD_BYTES } from "../shared/shareState";
 
 /**
  * v0 panel UI.
@@ -17,9 +18,15 @@ import { usePanelRpc } from "./usePanelRpc";
 export function PanelApp() {
   const rpc = usePanelRpc();
   const overridesFromStorage = rpc.tabStatus?.overrides ?? {};
+  const pageUrl = rpc.tabStatus?.url;
   const [flagKey, setFlagKey] = useState("");
   const [valueText, setValueText] = useState("");
   const [valueError, setValueError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "copied" }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
 
   const sdkDetected = Boolean(rpc.tabStatus?.sdkInfo);
   const sdkInfo = rpc.tabStatus?.sdkInfo;
@@ -62,6 +69,40 @@ export function PanelApp() {
 
   const handleClearAll = () => {
     rpc.clearOverrides();
+  };
+
+  const handleShare = async () => {
+    if (!pageUrl) {
+      setShareStatus({
+        kind: "error",
+        message: "Couldn't determine the page URL.",
+      });
+      return;
+    }
+    if (overrideEntries.length === 0) return;
+
+    const { url, encoded } = buildShareUrl(pageUrl, overridesFromStorage);
+    if (encoded.exceedsLimit) {
+      setShareStatus({
+        kind: "error",
+        message: `Shared state is too large (${encoded.size} chars, limit ${MAX_PAYLOAD_BYTES}). Remove some overrides and try again.`,
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus({ kind: "copied" });
+      // Auto-revert after a couple seconds so the button is reusable.
+      window.setTimeout(() => {
+        setShareStatus((s) => (s.kind === "copied" ? { kind: "idle" } : s));
+      }, 2000);
+    } catch (err) {
+      setShareStatus({
+        kind: "error",
+        message: `Couldn't copy to clipboard: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
   };
 
   return (
@@ -152,7 +193,16 @@ export function PanelApp() {
         </div>
       </div>
 
-      <div className="ld-section">
+      <div className="ld-section ld-actions">
+        <button
+          type="button"
+          className="ld-btn secondary"
+          onClick={handleShare}
+          disabled={overrideEntries.length === 0 || !pageUrl}
+          title="Copy a URL that applies these overrides for anyone with the extension installed"
+        >
+          {shareStatus.kind === "copied" ? "Copied!" : "Copy share link"}
+        </button>
         <button
           type="button"
           className="ld-btn danger"
@@ -162,6 +212,18 @@ export function PanelApp() {
           Clear all overrides
         </button>
       </div>
+      {shareStatus.kind === "error" && (
+        <div className="ld-hint" style={{ color: "#d33b3b" }}>
+          {shareStatus.message}
+        </div>
+      )}
+      {overrideEntries.length > 0 && (
+        <div className="ld-hint">
+          Share links require the recipient to have this extension
+          installed. The URL is read by the extension only — the host
+          page never sees or processes the share parameter.
+        </div>
+      )}
     </div>
   );
 }

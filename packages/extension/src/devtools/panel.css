@@ -232,6 +232,12 @@ body {
   border-color: rgba(211, 59, 59, 0.3);
 }
 
+.ld-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .ld-hint {
   font-size: 11px;
   color: #777;

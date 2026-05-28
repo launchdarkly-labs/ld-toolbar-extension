@@ -120,6 +120,7 @@ That's the entire integration. The plugin auto-detects whether the Chrome extens
 3. Click the **LaunchDarkly** tab in the DevTools tab strip (it may be behind the `»` overflow if you have many panels).
 4. The panel shows the SDK status, current overrides, and an "Add override" form.
 5. Type a flag key, type a value (JSON-parsed: `true`, `false`, `42`, `"string"`, or `{"foo":1}`), click **Add**. The flag flips immediately on the page.
+6. **Share a configuration:** once you've set overrides, click **Copy share link** in the panel. Send the resulting URL to a teammate. When they open it (with the extension installed), the overrides apply to their page automatically. The URL parameter is read by the extension and never by the host page, so it works in environments that block `localStorage`.
 
 ## Programmatic API
 
@@ -160,7 +161,7 @@ The programmatic API works **with or without the extension installed**. The exte
 | Framework support | JS / React / Vue / Angular | JS / React / Vue / Angular |
 | Context switching | ✅ | ❌ (parking lot) |
 | Event interception | ✅ | ❌ (parking lot) |
-| Share state via URL | ✅ | ❌ (planned — extension-mediated) |
+| Share state via URL | ✅ (writes to localStorage) | ✅ (writes to chrome.storage.local; needs extension on both ends) |
 | Distribution | npm + CDN | Sideloaded unpacked extension (v0) |
 
 The two are **independent** — this project doesn't depend on `@launchdarkly/toolbar`. They can coexist in the same app if you want both UIs available.
@@ -292,10 +293,8 @@ Run `npm install` (or your equivalent) in the host app. After rebuilding the bri
 
 What's intentionally **not** in v0, in rough priority order:
 
-- **Persistence across page reloads.** Save overrides to `chrome.storage.local` (per-origin scope), re-apply on tab reload.
-- **Bidirectional sync.** The panel UI currently shows only what it has set. If you also use `window.__ldBridge.setOverride(...)` from the page console, the panel doesn't reflect it. Add a reverse channel.
+- **Bidirectional sync.** The panel UI currently shows only what is in storage. If you also use `window.__ldBridge.setOverride(...)` from the page console, the panel doesn't reflect it. Add a reverse channel.
 - **Flag discovery.** Bridge plugin reports available flag keys to the panel so users can pick from a list instead of typing keys by hand.
-- **Share state via URL.** Both parties have the extension; sender encodes overrides into a URL param, recipient's extension reads it and applies — no `localStorage` touched on either side.
 - **Per-context overrides.** Maintain different override sets for different LD contexts.
 - **Chrome Web Store / Edge Add-ons / Firefox.** Currently sideload-only.
 - **Browser action popup** (not just DevTools panel).

@@ -58,6 +58,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       sender.tab?.url,
     );
     pushTabStatus(tabId);
+  } else if (message.type === "apply-shared-state") {
+    // Incoming share URL parsed by the content script. Merge into
+    // chrome.storage.local for this origin and push to the SDK if it
+    // has already registered.
+    void handleSharedStateApply(tabId, sender.tab?.url, message.overrides);
   } else if (message.type === "sdk-ready") {
     const entry: TabEntry = tabs.get(tabId) ?? { loadedAt: Date.now() };
     entry.sdkInfo = message.info;
@@ -174,6 +179,47 @@ async function handlePanelOverrideCommand(
 
   // Echo the new status back to the panel so its UI reflects storage.
   pushTabStatus(tabId);
+}
+
+async function handleSharedStateApply(
+  tabId: number,
+  url: string | undefined,
+  overrides: unknown,
+): Promise<void> {
+  const origin = originFromUrl(url);
+  if (!origin) return;
+  if (!overrides || typeof overrides !== "object") return;
+
+  const additions = overrides as Record<string, unknown>;
+  if (Object.keys(additions).length === 0) return;
+
+  try {
+    await mergeOverridesForOrigin(origin, additions);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[LD Toolbar Extension] failed to persist shared state for tab ${tabId}:`,
+      err,
+    );
+  }
+
+  // Push to the SDK now if it's listening. If sdk-ready hasn't fired
+  // yet, the existing restore-on-sdk-ready path will catch it shortly.
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      source: PROTOCOL,
+      type: "set-overrides",
+      overrides: additions,
+    });
+  } catch {
+    /* bridge plugin may not be registered yet — restore path handles it */
+  }
+
+  pushTabStatus(tabId);
+  // eslint-disable-next-line no-console
+  console.info(
+    `[LD Toolbar Extension] applied shared state to tab ${tabId} (${Object.keys(additions).length} override(s) for ${origin})`,
+  );
 }
 
 async function restoreStoredOverrides(tabId: number): Promise<void> {

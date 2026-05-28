@@ -188,8 +188,7 @@ Out of scope for v0 (parking lot):
 - Firefox / non-Chrome
 - Tooltips, theming, polish
 
-**Shareable state (deferred — design noted here):**
-Both parties have the extension installed (this is acceptable for the target audience). Sender clicks "Share" in the DevTools panel → extension serializes current overrides into a URL param like `?ld-ext-state=<base64-json>`. Sender copies the URL, shares it. Recipient (also has extension) opens the URL → extension's content script reads the param, writes to `chrome.storage.local`, sends override message to the bridge plugin via the RPC channel. **The page's `localStorage` is never touched** because the URL param is consumed by the extension, not by any page JS. Build this after the core RPC + DevTools panel is validated end-to-end.
+**Shareable state — implemented.** Sender clicks "Copy share link" in the DevTools panel → extension encodes current overrides as `?ld-ext-state=<base64-json>` and writes the full URL to the clipboard. Recipient (also has extension) opens the URL → content script (`document_start`) reads the param, sends `apply-shared-state` to background SW, background merges into `chrome.storage.local` and pushes to the bridge plugin via the existing RPC channel. Param is stripped from the visible URL via `history.replaceState`. **The page's `localStorage` is never touched.** Payload is base64-encoded JSON with `{ version, overrides }`; capped at 8KB to match the official toolbar.
 
 ## Testing strategy
 
