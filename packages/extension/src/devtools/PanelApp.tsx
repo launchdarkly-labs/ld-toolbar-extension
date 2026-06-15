@@ -133,7 +133,7 @@ export function PanelApp() {
             )}
           </>
         ) : rpc.tabStatus ? (
-          "Page is loaded but no LD SDK has registered yet. Reload the page if you expect the SDK to be present."
+          "Reconnecting to the LaunchDarkly SDK… If this message persists, the SDK isn't running on this page — reload to retry."
         ) : rpc.connected ? (
           "Waiting for tab info…"
         ) : (

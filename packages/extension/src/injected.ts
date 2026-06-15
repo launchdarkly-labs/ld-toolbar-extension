@@ -14,7 +14,7 @@
  */
 
 const PROTOCOL = "ld-devtools-ext";
-const EXTENSION_VERSION = "0.0.1";
+const EXTENSION_VERSION = "0.0.2";
 
 declare global {
   interface Window {
@@ -59,7 +59,8 @@ export interface SdkReadyInfo {
 export type OverrideMessage =
   | { type: "set-overrides"; overrides: Record<string, unknown> }
   | { type: "remove-override"; flagKey: string }
-  | { type: "clear-overrides" };
+  | { type: "clear-overrides" }
+  | { type: "request-resync" };
 
 export type OverrideListener = (msg: OverrideMessage) => void;
 export type Unsubscribe = () => void;
@@ -145,6 +146,8 @@ window.addEventListener("message", (event) => {
     fanOut({ type: "remove-override", flagKey: data.flagKey });
   } else if (data.type === "clear-overrides") {
     fanOut({ type: "clear-overrides" });
+  } else if (data.type === "request-resync") {
+    fanOut({ type: "request-resync" });
   }
 });
 
