@@ -18,6 +18,15 @@
 const PROTOCOL = "ld-devtools-ext";
 const PORT_NAME_PREFIX = "panel:";
 const STORAGE_KEY = "overrides";
+/**
+ * chrome.storage.session key holding a snapshot of the in-memory `tabs`
+ * registry. MV3 evicts the service worker aggressively (≈30s idle, and a
+ * hard recycle even with an open port), which wipes `tabs`. Session storage
+ * survives SW restarts within a browser session, so we rehydrate from it on
+ * boot — otherwise the panel reports "no LD SDK has registered yet" until a
+ * full page reload re-fires the handshake.
+ */
+const SESSION_TABS_KEY = "tabRegistry";
 
 interface TabEntry {
   url?: string;
@@ -37,6 +46,54 @@ const panelPorts: Map<number, chrome.runtime.Port> = new Map();
 // eslint-disable-next-line no-console
 console.info("[LD Toolbar Extension] service worker booted");
 
+// ─── Service-worker-restart resilience ────────────────────────────────
+/**
+ * Rehydrate `tabs` from chrome.storage.session. Runs once per SW lifetime.
+ * Idempotent and cheap, but several event paths may race to call it on a
+ * cold start, so we memoize the in-flight promise.
+ */
+let rehydratePromise: Promise<void> | null = null;
+function rehydrateTabs(): Promise<void> {
+  if (rehydratePromise) return rehydratePromise;
+  rehydratePromise = (async () => {
+    try {
+      const result = await chrome.storage.session.get(SESSION_TABS_KEY);
+      const stored = result[SESSION_TABS_KEY] as
+        | Record<string, TabEntry>
+        | undefined;
+      if (!stored) return;
+      for (const [id, entry] of Object.entries(stored)) {
+        const tabId = parseInt(id, 10);
+        // Don't clobber anything a live event already populated this boot.
+        if (!Number.isNaN(tabId) && !tabs.has(tabId)) {
+          tabs.set(tabId, entry);
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[LD Toolbar Extension] failed to rehydrate tabs:", err);
+    }
+  })();
+  return rehydratePromise;
+}
+
+/** Persist the current `tabs` registry so the next SW boot can recover it. */
+async function persistTabs(): Promise<void> {
+  try {
+    const obj: Record<number, TabEntry> = {};
+    for (const [id, entry] of tabs) obj[id] = entry;
+    await chrome.storage.session.set({ [SESSION_TABS_KEY]: obj });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[LD Toolbar Extension] failed to persist tabs:", err);
+  }
+}
+
+// Kick off rehydration immediately on boot. Event handlers that read `tabs`
+// await this first so a panel reconnecting right after a restart sees the
+// recovered state rather than an empty registry.
+void rehydrateTabs();
+
 chrome.runtime.onInstalled.addListener((details) => {
   // eslint-disable-next-line no-console
   console.info("[LD Toolbar Extension] installed", details);
@@ -55,6 +112,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
   if (message.type === "content-script-loaded") {
     tabs.set(tabId, { url: sender.tab?.url, loadedAt: Date.now() });
+    void persistTabs();
     // eslint-disable-next-line no-console
     console.info(
       `[LD Toolbar Extension] content script loaded in tab ${tabId}`,
@@ -71,6 +129,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     entry.sdkInfo = message.info;
     entry.url = sender.tab?.url ?? entry.url;
     tabs.set(tabId, entry);
+    void persistTabs();
     // eslint-disable-next-line no-console
     console.info(
       `[LD Toolbar Extension] SDK ready in tab ${tabId}`,
@@ -99,6 +158,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       entry.flagsTimestamp = snap.timestamp;
       entry.url = sender.tab?.url ?? entry.url;
       tabs.set(tabId, entry);
+      void persistTabs();
       pushTabStatus(tabId);
     }
   }
@@ -106,6 +166,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabs.delete(tabId);
+  void persistTabs();
   const port = panelPorts.get(tabId);
   if (port) {
     try {
@@ -135,6 +196,7 @@ chrome.runtime.onConnect.addListener((port) => {
     if (!message || message.source !== PROTOCOL) return;
 
     if (message.type === "get-tab-status") {
+      void requestResyncIfNeeded(tabId);
       pushTabStatus(tabId);
       return;
     }
@@ -297,7 +359,28 @@ async function restoreStoredOverrides(tabId: number): Promise<void> {
   }
 }
 
+/**
+ * When a panel asks for status but we have no record that an SDK registered
+ * in that tab, ping the page. If the bridge plugin is still alive there (it
+ * is, as long as the page wasn't reloaded), it re-announces and the panel
+ * recovers — no reload required. A no-op when we already know the SDK, when
+ * the page has no content script, or when the page genuinely has no SDK.
+ */
+async function requestResyncIfNeeded(tabId: number): Promise<void> {
+  await rehydrateTabs();
+  if (tabs.get(tabId)?.sdkInfo) return;
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      source: PROTOCOL,
+      type: "request-resync",
+    });
+  } catch {
+    /* no content script / page not loaded — nothing to resync */
+  }
+}
+
 async function pushTabStatus(tabId: number): Promise<void> {
+  await rehydrateTabs();
   const port = panelPorts.get(tabId);
   if (!port) return;
   const entry = tabs.get(tabId);

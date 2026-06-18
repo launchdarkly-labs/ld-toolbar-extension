@@ -1,6 +1,6 @@
 {
   "name": "@launchdarkly/toolbar-extension-bridge",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "LaunchDarkly SDK plugin that bridges flag overrides between a host app and the LD Dev Toolbar Chrome extension. In-memory only; no localStorage.",
   "license": "Apache-2.0",
   "type": "module",

@@ -48,7 +48,11 @@ interface SdkReadyInfo {
 type OverrideMessage =
   | { type: "set-overrides"; overrides: Record<string, LDFlagValue> }
   | { type: "remove-override"; flagKey: string }
-  | { type: "clear-overrides" };
+  | { type: "clear-overrides" }
+  // Sent by the extension when its background service worker has restarted
+  // (MV3 evicts it aggressively) and lost the in-memory record that this
+  // SDK ever registered. We respond by re-announcing — no page reload needed.
+  | { type: "request-resync" };
 
 /**
  * SDK plugin that lets the LaunchDarkly Dev Toolbar Chrome extension drive
@@ -268,20 +272,7 @@ export class ExtensionBridgePlugin implements LDPlugin {
     );
 
     // Announce ourselves with whatever environment info we have.
-    if (typeof hook.onSdkReady === "function") {
-      try {
-        hook.onSdkReady({
-          sdkName: this.envMetadata?.sdk?.name,
-          sdkVersion: this.envMetadata?.sdk?.version,
-          clientSideId: this.envMetadata?.clientSideId,
-          applicationId: this.envMetadata?.application?.id,
-          applicationVersion: this.envMetadata?.application?.version,
-        });
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error("[ExtensionBridgePlugin] onSdkReady threw:", error);
-      }
-    }
+    this.announceSdkReady();
 
     // Subscribe to override commands from the extension.
     if (typeof hook.subscribeToOverrides === "function") {
@@ -301,6 +292,27 @@ export class ExtensionBridgePlugin implements LDPlugin {
     // Subscribe to SDK flag changes so the panel can show real keys
     // and values. Both 'ready' (initial values) and 'change' (deltas).
     this.subscribeToSdkFlagChanges();
+  }
+
+  /**
+   * Tell the extension this SDK is present and registered. Safe to call
+   * repeatedly — fired once at register() and again whenever the extension
+   * asks us to resync after its service worker has restarted.
+   */
+  private announceSdkReady(): void {
+    if (!this.hook || typeof this.hook.onSdkReady !== "function") return;
+    try {
+      this.hook.onSdkReady({
+        sdkName: this.envMetadata?.sdk?.name,
+        sdkVersion: this.envMetadata?.sdk?.version,
+        clientSideId: this.envMetadata?.clientSideId,
+        applicationId: this.envMetadata?.application?.id,
+        applicationVersion: this.envMetadata?.application?.version,
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[ExtensionBridgePlugin] onSdkReady threw:", error);
+    }
   }
 
   private subscribeToSdkFlagChanges(): void {
@@ -391,6 +403,13 @@ export class ExtensionBridgePlugin implements LDPlugin {
       this.removeOverride(msg.flagKey);
     } else if (msg.type === "clear-overrides") {
       this.clearAllOverrides();
+    } else if (msg.type === "request-resync") {
+      // The extension's service worker restarted and forgot about us.
+      // Re-announce presence, current flags, and current overrides so the
+      // panel recovers without the user reloading the page.
+      this.announceSdkReady();
+      this.pushFlagSnapshot();
+      this.notifyExtensionOfOverrides();
     }
   }
 }
